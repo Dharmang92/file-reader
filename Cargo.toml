@@ -1,0 +1,25 @@
+[package]
+name = "file-reader"
+version = "0.1.0"
+edition = "2024"
+
+[profile.release]
+lto = true        # Link-time optimization
+codegen-units = 1 # More optimization but slower build
+panic = 'abort'   # Smaller binary by removing panic unwinding
+
+# [target.x86_64-pc-windows-msvc]
+# rustflags = ["-C", "link-args=/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup"]
+
+[dependencies]
+walkdir = "2.5.0"
+
+eframe = { version = "0.31.1", features = ["default"] }
+
+# For image support:
+egui_extras = { version = "*", features = ["default", "image"] }
+
+env_logger = { version = "0.11.8", default-features = false, features = [
+  "auto-color",
+] }
+egui_flex = "0.3.0"
