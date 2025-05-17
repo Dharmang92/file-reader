@@ -1,0 +1,25 @@
+name: Version
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update Cargo.toml version from tag
+        run: |
+          TAG_NAME="${GITHUB_REF##*/}"
+          echo "Tag name: $TAG_NAME"
+          sed -i "s/^version = \".*\"/version = \"$TAG_NAME\"/" Cargo.toml
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add Cargo.toml
+          git commit -m "chore: update Cargo.toml version to $TAG_NAME"
+          git push

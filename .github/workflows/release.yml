@@ -10,24 +10,29 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   BINARY_NAME: "file-reader"
+  TARGET: "x86_64-pc-windows-msvc"
 
 jobs:
   build-release:
-    runs-on: ubuntu-latest
+    name: Build Release
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
       - name: Build Release
-        run: cargo build --release
+        run: |
+          rustup target add ${{ env.TARGET }}
+          cargo build --release --target ${{ env.TARGET }}
+          strip target/${{ env.TARGET }}/release/${{ env.BINARY_NAME }}
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}
-          path: target/release/${{ env.BINARY_NAME }}
+          path: target/${{ env.TARGET }}/release/${{ env.BINARY_NAME }}
 
   create-release:
-    name: Create Release
     needs: build-release
-    runs-on: ubuntu-latest
+    name: Create Release
+    runs-on: self-hosted
     steps:
       - name: Download Artifact
         uses: actions/download-artifact@v4
