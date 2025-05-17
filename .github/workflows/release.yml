@@ -50,14 +50,19 @@ jobs:
       #     "Signing ${{ env.BINARY_NAME }}.exe"
       #     signtool sign /fd SHA256 /f ${{ env.CERT_FILE }} /p ${{ env.CERT_PASSWORD }} ${{ env.BINARY_NAME }}.exe
 
-      - name: Decode PFX certificate
-        shell: powershell
-        run: |
-          [IO.File]::WriteAllBytes("${{ env.CERT_FILE }}", [Convert]::FromBase64String("${{ secrets.PFX_CERT_BASE64 }}"))
+      # - name: Decode PFX certificate
+      #   shell: powershell
+      #   run: |
+      #     [IO.File]::WriteAllBytes("${{ env.CERT_FILE }}", [Convert]::FromBase64String("${{ secrets.PFX_CERT_BASE64 }}"))
 
-      - name: Sign EXE
-        run: |
-          signtool sign /fd SHA256 /f ${{ env.CERT_FILE }} /p "${{ secrets.PFX_PASSWORD }}" ${{ env.BINARY_NAME }}.exe
+      # - name: Sign EXE
+      #   run: |
+      #     $kitPath = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
+      #     $signtool = Get-ChildItem -Path $kitPath -Recurse -Filter signtool.exe |
+      #           Where-Object { $_.FullName -like "*x64*" } |
+      #           Sort-Object FullName -Descending |
+      #           Select-Object -First 1
+      #     & $signtool.FullName sign /fd SHA256 /f ${{ env.CERT_FILE }} /p "${{ secrets.PFX_PASSWORD }}" ${{ env.BINARY_NAME }}.exe
 
       - name: Create Release
         id: create-release
