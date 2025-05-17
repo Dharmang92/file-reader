@@ -6,15 +6,12 @@ use eframe::{
 };
 use std::{
     fs,
-    path::{Path, PathBuf},
+    path::{Path, PathBuf, absolute},
 };
 use walkdir::WalkDir;
 
 mod code_editor;
 use code_editor::CodeEditor;
-
-// const DEFAULT_PATH: &str = "C:/Users/dharmang.gajjar/AppData/Roaming/Microsoft/UserSecrets";
-const DEFAULT_PATH: &str = "C:/Users/dharmang.gajjar/Desktop/Projects/file-reader/.gitignore";
 
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions::default();
@@ -50,7 +47,7 @@ impl MyApp {
         cc.egui_ctx.set_style(style);
 
         let mut app = Self {
-            path: DEFAULT_PATH.into(),
+            path: get_local_path(),
             files: Vec::new(),
             selected_file: None,
             file_content: String::new(),
@@ -66,7 +63,7 @@ impl MyApp {
     fn setup(&mut self) {
         if self.path.is_empty() || !Path::new(&self.path).exists() {
             self.error = "(Invalid Path) Path does not exist!".to_string();
-            self.path = DEFAULT_PATH.into();
+            self.path = get_local_path();
         } else {
             self.error.clear();
             self.files = WalkDir::new(&self.path)
@@ -92,6 +89,17 @@ impl MyApp {
                 });
             });
     }
+}
+
+fn get_local_path() -> String {
+    absolute(
+        dirs::data_local_dir()
+            .unwrap()
+            .join("Microsoft/UserSecrets"),
+    )
+    .expect("Failed to fetch local directory!")
+    .to_string_lossy()
+    .to_string()
 }
 
 impl App for MyApp {
@@ -138,8 +146,6 @@ impl App for MyApp {
                                 .id_salt("interactive_container")
                                 .sense(Sense::hover()),
                             |ui| {
-                                // ctx.output_mut(|o| o.cursor_icon = egui::CursorIcon::PointingHand);
-
                                 let response = ui.response();
                                 let visuals = ui.style().interact(&response);
                                 let text_color = visuals.text_color();
