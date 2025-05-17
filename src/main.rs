@@ -18,12 +18,6 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "File Reader",
         options,
-        // Box::new(|cc| {
-        //     let mut app = MyApp::new(cc);
-        //     app.setup();
-
-        //     Ok(Box::new(app))
-        // }),
         Box::new(|cc| Ok(Box::new(MyApp::new(cc)))),
     )
 }
