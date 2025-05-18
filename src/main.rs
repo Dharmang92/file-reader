@@ -43,8 +43,7 @@ impl MyApp {
         cc.egui_ctx.set_style(style);
 
         let mut app = Self {
-            // path: get_local_path(),
-            path: "C:/Users/dharmang/git/file-reader/src".into(),
+            path: get_local_path(),
             files: Vec::new(),
             search: String::new(),
             filtered_files: Vec::new(),
