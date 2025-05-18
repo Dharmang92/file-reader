@@ -25,6 +25,8 @@ fn main() -> Result<(), eframe::Error> {
 struct MyApp {
     path: String,
     files: Vec<PathBuf>,
+    search: String,
+    filtered_files: Vec<PathBuf>,
     selected_file: Option<PathBuf>,
     file_content: String,
     edited_content: String,
@@ -41,8 +43,11 @@ impl MyApp {
         cc.egui_ctx.set_style(style);
 
         let mut app = Self {
-            path: get_local_path(),
+            // path: get_local_path(),
+            path: "C:/Users/dharmang/git/file-reader/src".into(),
             files: Vec::new(),
+            search: String::new(),
+            filtered_files: Vec::new(),
             selected_file: None,
             file_content: String::new(),
             edited_content: String::new(),
@@ -66,6 +71,38 @@ impl MyApp {
                 .filter(|e| e.file_type().is_file())
                 .map(|e| e.path().to_path_buf())
                 .collect();
+
+            self.update_filtered_files();
+
+            self.select_first_file();
+        }
+    }
+
+    fn update_filtered_files(&mut self) {
+        if self.search.is_empty() {
+            self.filtered_files = self.files.clone();
+        } else {
+            let search_lower = self.search.to_lowercase();
+            self.filtered_files = self
+                .files
+                .iter()
+                .filter(|path| {
+                    path.to_string_lossy()
+                        .to_lowercase()
+                        .contains(&search_lower)
+                })
+                .cloned()
+                .collect();
+        }
+    }
+
+    fn select_first_file(&mut self) {
+        if let Some(first_file) = self.filtered_files.first() {
+            self.selected_file = Some(first_file.clone());
+            self.file_content =
+                fs::read_to_string(first_file).unwrap_or_else(|_| "<failed to read file>".into());
+            self.edited_content = self.file_content.clone();
+            self.editor.set_content(self.edited_content.clone());
         }
     }
 
@@ -98,34 +135,45 @@ fn get_local_path() -> String {
 
 impl App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if !self.error.is_empty() {
-            self.show_error_popup(ctx);
-        }
-
         egui::TopBottomPanel::top("path_input_panel").show(ctx, |ui| {
-            ui.horizontal_wrapped(|ui| {
+            ui.horizontal(|ui| {
+                if ui.button("Show Files").clicked() {
+                    self.setup();
+                }
+
                 egui::TextEdit::singleline(&mut self.path)
                     .font(FontSelection::FontId(egui::FontId {
                         size: 14.0,
                         family: egui::FontFamily::default(),
                     }))
-                    .hint_text("Eg. C:/Users/dharmang.gajjar/AppData/Roaming/Microsoft/UserSecrets")
-                    .desired_width(ui.available_width() - 100.0)
+                    .hint_text(format!("Eg. {}", get_local_path()))
+                    .desired_width(ui.available_width())
                     .show(ui);
-
-                if ui.button("Show Files").clicked() {
-                    self.setup();
-                }
             });
         });
 
         egui::SidePanel::left("file_list_panel").show(ctx, |ui| {
-            ui.heading("Files");
+            ui.horizontal(|ui| {
+                ui.heading("Files");
 
-            // self.table.ui(ui);
+                let search_response = egui::TextEdit::singleline(&mut self.search)
+                    .font(FontSelection::FontId(egui::FontId {
+                        size: 14.0,
+                        family: egui::FontFamily::default(),
+                    }))
+                    .hint_text("Search...")
+                    .desired_width(ui.available_width())
+                    .show(ui)
+                    .response;
+
+                if search_response.changed() {
+                    self.update_filtered_files();
+                    self.select_first_file();
+                }
+            });
 
             egui::ScrollArea::vertical().show(ui, |ui| {
-                for file in &self.files {
+                for file in &self.filtered_files {
                     let folder = file
                         .parent()
                         .unwrap()
@@ -148,16 +196,20 @@ impl App for MyApp {
                                     .fill(visuals.bg_fill.gamma_multiply(0.3))
                                     .stroke(visuals.bg_stroke)
                                     .show(ui, |ui| {
+                                        ui.output_mut(|o| {
+                                            o.cursor_icon = egui::CursorIcon::PointingHand
+                                        });
+
                                         ui.set_width(ui.available_width());
 
                                         ui.vertical_centered(|ui| {
-                                            ui.add_space(20.0);
+                                            ui.add_space(10.0);
                                             ui.label(
                                                 RichText::new(format!("📂 {} / {}", folder, fname))
                                                     .color(text_color)
                                                     .size(15.0),
                                             );
-                                            ui.add_space(20.0);
+                                            ui.add_space(10.0);
                                         });
                                     });
                             },
@@ -172,20 +224,38 @@ impl App for MyApp {
                         self.editor.set_content(self.edited_content.clone());
                     }
                 }
+
+                if self.filtered_files.is_empty() {
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(20.0);
+                        ui.label("No matches found!");
+                        ui.add_space(20.0);
+                    });
+                }
             });
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            self.editor.ui(ui);
-            self.edited_content = self.editor.get_content();
-
-            if ui.button("Save").clicked() {
-                if let Some(ref path) = self.selected_file {
-                    if let Err(err) = fs::write(path, &self.edited_content) {
-                        self.error = format!("Failed to save file: {}", err);
+            ui.horizontal(|ui| {
+                if ui.button("Save").clicked() {
+                    if let Some(ref path) = self.selected_file {
+                        if let Err(err) = fs::write(path, &self.edited_content) {
+                            self.error = format!("Failed to save file: {}", err);
+                        }
                     }
                 }
-            }
+
+                if let Some(ref path) = self.selected_file {
+                    ui.monospace(path.file_name().unwrap_or_default().to_string_lossy());
+                }
+            });
+
+            self.editor.ui(ui);
+            self.edited_content = self.editor.get_content();
         });
+
+        if !self.error.is_empty() {
+            self.show_error_popup(ctx);
+        }
     }
 }
