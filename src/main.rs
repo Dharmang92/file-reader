@@ -43,7 +43,7 @@ impl MyApp {
         cc.egui_ctx.set_style(style);
 
         let mut app = Self {
-            path: get_local_path(),
+            path: get_roaming_path(),
             files: Vec::new(),
             search: String::new(),
             filtered_files: Vec::new(),
@@ -61,7 +61,7 @@ impl MyApp {
     fn setup(&mut self) {
         if self.path.is_empty() || !Path::new(&self.path).exists() {
             self.error = "(Invalid Path) Path does not exist!".to_string();
-            self.path = get_local_path();
+            self.path = get_roaming_path();
         } else {
             self.error.clear();
             self.files = WalkDir::new(&self.path)
@@ -121,15 +121,11 @@ impl MyApp {
     }
 }
 
-fn get_local_path() -> String {
-    absolute(
-        dirs::data_local_dir()
-            .unwrap()
-            .join("Microsoft/UserSecrets"),
-    )
-    .expect("Failed to fetch local directory!")
-    .to_string_lossy()
-    .to_string()
+fn get_roaming_path() -> String {
+    absolute(dirs::data_dir().unwrap().join("Microsoft/UserSecrets"))
+        .expect("Failed to fetch local directory!")
+        .to_string_lossy()
+        .to_string()
 }
 
 impl App for MyApp {
@@ -145,7 +141,7 @@ impl App for MyApp {
                         size: 14.0,
                         family: egui::FontFamily::default(),
                     }))
-                    .hint_text(format!("Eg. {}", get_local_path()))
+                    .hint_text(format!("Eg. {}", get_roaming_path()))
                     .desired_width(ui.available_width())
                     .show(ui);
             });
