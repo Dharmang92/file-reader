@@ -26,6 +26,7 @@ struct MyApp {
     path: String,
     files: Vec<PathBuf>,
     search: String,
+    search_suggestions: Vec<String>,
     filtered_files: Vec<PathBuf>,
     selected_file: Option<PathBuf>,
     file_content: String,
@@ -46,6 +47,7 @@ impl MyApp {
             path: get_roaming_path(),
             files: Vec::new(),
             search: String::new(),
+            search_suggestions: Vec::new(),
             filtered_files: Vec::new(),
             selected_file: None,
             file_content: String::new(),
@@ -119,6 +121,33 @@ impl MyApp {
                 });
             });
     }
+
+    fn update_suggestions(&mut self) {
+        let path = PathBuf::from(&self.path);
+        let (dir, prefix) = if path.is_dir() {
+            (path.clone(), String::new())
+        } else {
+            let mut dir = path.clone();
+            dir.pop();
+            (
+                dir,
+                path.file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string(),
+            )
+        };
+
+        self.search_suggestions.clear();
+        if let Ok(entries) = fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let file_name = entry.file_name().to_string_lossy().to_string();
+                if file_name.starts_with(&prefix) {
+                    self.search_suggestions.push(file_name);
+                }
+            }
+        }
+    }
 }
 
 fn get_roaming_path() -> String {
@@ -136,15 +165,43 @@ impl App for MyApp {
                     self.setup();
                 }
 
-                egui::TextEdit::singleline(&mut self.path)
+                let response = egui::TextEdit::singleline(&mut self.path)
                     .font(FontSelection::FontId(egui::FontId {
                         size: 14.0,
                         family: egui::FontFamily::default(),
                     }))
                     .hint_text(format!("Eg. {}", get_roaming_path()))
                     .desired_width(ui.available_width())
-                    .show(ui);
+                    .id("path_input".into())
+                    .show(ui)
+                    .response;
+
+                if response.changed() {
+                    self.update_suggestions();
+                }
             });
+
+            if !self.search_suggestions.is_empty() {
+                egui::ComboBox::from_label("Suggestions")
+                    .selected_text("Select a suggestion")
+                    .width(ui.available_width())
+                    .height(200.0)
+                    .show_ui(ui, |ui| {
+                        for suggestion in self.search_suggestions.clone() {
+                            let full_path = PathBuf::from(&self.path)
+                                .join(suggestion)
+                                .to_string_lossy()
+                                .to_string();
+
+                            if ui.selectable_label(false, &full_path).clicked() {
+                                self.path = full_path;
+                                self.setup();
+                                self.update_suggestions();
+                                ui.close_menu();
+                            }
+                        }
+                    });
+            }
         });
 
         egui::SidePanel::left("file_list_panel").show(ctx, |ui| {
