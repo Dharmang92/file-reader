@@ -7,11 +7,11 @@
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug executable 'user-secrets'",
+      "name": "Debug executable 'file-reader'",
       "cargo": {
-        "args": ["build", "--bin=user-secrets", "--package=user-secrets"],
+        "args": ["build", "--bin=file-reader", "--package=file-reader"],
         "filter": {
-          "name": "user-secrets",
+          "name": "file-reader",
           "kind": "bin"
         }
       },
@@ -21,11 +21,11 @@
     {
       "type": "lldb",
       "request": "launch",
-      "name": "Debug unit tests in executable 'user-secrets'",
+      "name": "Debug unit tests in executable 'file-reader'",
       "cargo": {
-        "args": ["test", "--no-run", "--bin=user-secrets", "--package=user-secrets"],
+        "args": ["test", "--no-run", "--bin=file-reader", "--package=file-reader"],
         "filter": {
-          "name": "user-secrets",
+          "name": "file-reader",
           "kind": "bin"
         }
       },
