@@ -2,16 +2,19 @@
 
 use eframe::{
     App, CreationContext,
-    egui::{self, FontSelection, Frame, RichText, Sense, UiBuilder},
+    egui::{self, FontSelection},
 };
 use std::{
     fs,
-    path::{Path, PathBuf, absolute},
+    path::{Path, PathBuf},
 };
 use walkdir::WalkDir;
 
 mod code_editor;
 use code_editor::CodeEditor;
+
+mod explorer;
+use explorer::Explorer;
 
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions::default();
@@ -24,6 +27,7 @@ fn main() -> Result<(), eframe::Error> {
 
 struct MyApp {
     path: String,
+    explorer: Explorer,
     files: Vec<PathBuf>,
     search: String,
     search_suggestions: Vec<String>,
@@ -44,7 +48,8 @@ impl MyApp {
         cc.egui_ctx.set_style(style);
 
         let mut app = Self {
-            path: get_roaming_path(),
+            path: get_roaming_path().to_string_lossy().to_string(),
+            explorer: Explorer::from_pathbuf(&get_roaming_path().into()),
             files: Vec::new(),
             search: String::new(),
             search_suggestions: Vec::new(),
@@ -63,10 +68,11 @@ impl MyApp {
     fn setup(&mut self) {
         if self.path.is_empty() || !Path::new(&self.path).exists() {
             self.error = "(Invalid Path) Path does not exist!".to_string();
-            self.path = get_roaming_path();
+            self.path = get_roaming_path().to_string_lossy().to_string();
         } else {
             self.error.clear();
             self.files = WalkDir::new(&self.path)
+                .max_depth(1)
                 .into_iter()
                 .filter_map(Result::ok)
                 .filter(|e| e.file_type().is_file())
@@ -76,6 +82,8 @@ impl MyApp {
             self.update_filtered_files();
 
             self.select_first_file();
+
+            self.explorer = Explorer::from_pathbuf(&PathBuf::from(self.path.clone()));
         }
     }
 
@@ -150,11 +158,12 @@ impl MyApp {
     }
 }
 
-fn get_roaming_path() -> String {
-    absolute(dirs::data_dir().unwrap().join("Microsoft/UserSecrets"))
+fn get_roaming_path() -> PathBuf {
+    dirs::data_dir()
+        .unwrap()
+        .join("Microsoft/UserSecrets")
+        .canonicalize()
         .expect("Failed to fetch local directory!")
-        .to_string_lossy()
-        .to_string()
 }
 
 impl App for MyApp {
@@ -170,7 +179,10 @@ impl App for MyApp {
                         size: 14.0,
                         family: egui::FontFamily::default(),
                     }))
-                    .hint_text(format!("Eg. {}", get_roaming_path()))
+                    .hint_text(format!(
+                        "Eg. {}",
+                        get_roaming_path().to_string_lossy().to_string()
+                    ))
                     .desired_width(ui.available_width())
                     .id("path_input".into())
                     .show(ui)
@@ -224,67 +236,13 @@ impl App for MyApp {
                 }
             });
 
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                for file in &self.filtered_files {
-                    let folder = file
-                        .parent()
-                        .unwrap()
-                        .file_name()
-                        .unwrap()
-                        .to_string_lossy();
-                    let fname = file.file_name().unwrap().to_string_lossy();
-
-                    let response = ui
-                        .scope_builder(
-                            UiBuilder::new()
-                                .id_salt("interactive_container")
-                                .sense(Sense::hover()),
-                            |ui| {
-                                let response = ui.response();
-                                let visuals = ui.style().interact(&response);
-                                let text_color = visuals.text_color();
-
-                                Frame::canvas(ui.style())
-                                    .fill(visuals.bg_fill.gamma_multiply(0.3))
-                                    .stroke(visuals.bg_stroke)
-                                    .show(ui, |ui| {
-                                        ui.output_mut(|o| {
-                                            o.cursor_icon = egui::CursorIcon::PointingHand
-                                        });
-
-                                        ui.set_width(ui.available_width());
-
-                                        ui.vertical_centered(|ui| {
-                                            ui.add_space(10.0);
-                                            ui.label(
-                                                RichText::new(format!("📂 {} / {}", folder, fname))
-                                                    .color(text_color)
-                                                    .size(15.0),
-                                            );
-                                            ui.add_space(10.0);
-                                        });
-                                    });
-                            },
-                        )
-                        .response;
-
-                    if response.hovered() {
-                        self.selected_file = Some(file.clone());
-                        self.file_content = fs::read_to_string(file)
-                            .unwrap_or_else(|_| "<failed to read file>".into());
-                        self.edited_content = self.file_content.clone();
-                        self.editor.set_content(self.edited_content.clone());
-                    }
-                }
-
-                if self.filtered_files.is_empty() {
-                    ui.vertical_centered(|ui| {
-                        ui.add_space(20.0);
-                        ui.label("No matches found!");
-                        ui.add_space(20.0);
-                    });
-                }
-            });
+            if let Some(selected) = self.explorer.ui(ui) {
+                self.selected_file = Some(selected.clone());
+                self.file_content = fs::read_to_string(&selected)
+                    .unwrap_or_else(|_| "<failed to read file>".into());
+                self.edited_content = self.file_content.clone();
+                self.editor.set_content(self.edited_content.clone());
+            }
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
