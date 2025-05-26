@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    time::{Duration, Instant},
+};
 
 use eframe::egui::{self, CollapsingHeader, RichText};
 use walkdir::WalkDir;
@@ -9,28 +12,19 @@ pub struct Explorer {
     pub path: PathBuf,
     pub children: Vec<Explorer>,
     pub is_file: bool,
-    pub loaded: bool,
+    pub opened: bool,
+    pub initial_open: bool,
+    pub last_accessed_time: Instant,
+    pub access_count: u16,
 }
 
-impl Explorer {
-    pub fn default_dir(name: impl Into<String>, path: PathBuf) -> Self {
-        Self {
-            name: name.into(),
-            path,
-            children: vec![],
-            is_file: false,
-            loaded: false,
-        }
-    }
+const TIME_THRESHOLD: Duration = Duration::from_secs(5);
+const ACCESS_THRESHOLD: u16 = 2;
 
-    pub fn file(name: impl Into<String>, path: PathBuf) -> Self {
-        Self {
-            name: name.into(),
-            path,
-            children: vec![],
-            is_file: true,
-            loaded: true,
-        }
+impl Explorer {
+    pub fn from_pathbuf(path: &PathBuf) -> Self {
+        let name = Self::name(path);
+        Self::folder(name, path.clone(), Some(true))
     }
 
     fn name(path: &Path) -> String {
@@ -40,17 +34,41 @@ impl Explorer {
             .to_string()
     }
 
-    pub fn from_pathbuf(path: &PathBuf) -> Self {
-        let name = Self::name(path);
-        let mut root = Self::default_dir(name, path.clone());
-        root.load_children(); // Load children once on setup
-        root
+    pub fn folder(name: impl Into<String>, path: PathBuf, initial_open: Option<bool>) -> Self {
+        Self {
+            name: name.into(),
+            path,
+            children: vec![],
+            is_file: false,
+            opened: false,
+            initial_open: initial_open.unwrap_or(false),
+            last_accessed_time: Instant::now(),
+            access_count: 0,
+        }
+    }
+
+    pub fn file(name: impl Into<String>, path: PathBuf) -> Self {
+        Self {
+            name: name.into(),
+            path,
+            children: vec![],
+            is_file: true,
+            opened: true,
+            initial_open: true,
+            last_accessed_time: Instant::now(),
+            access_count: 0,
+        }
     }
 
     fn load_children(&mut self) {
-        if self.loaded || self.is_file {
+        if !self.children.is_empty() {
             return;
         }
+
+        println!(
+            "load_children {:?} {}",
+            self.last_accessed_time, self.access_count
+        );
 
         self.children = WalkDir::new(&self.path)
             .max_depth(1)
@@ -61,15 +79,37 @@ impl Explorer {
                 let path = entry.path().to_path_buf();
                 let name = Self::name(&path);
                 if entry.file_type().is_dir() {
-                    Self::default_dir(name, path)
+                    Self::folder(name, path, None)
                 } else {
                     Self::file(name, path)
                 }
             })
             .collect();
 
-        self.loaded = true;
+        self.last_accessed_time = Instant::now();
+        self.access_count += 1;
     }
+
+    // fn clear_children(&mut self) {
+    //     for child in &mut self.children {
+    //         if !child.is_file {
+    //             child.clear_children();
+    //         }
+    //     }
+
+    //     self.children.clear();
+    //     self.opened = false;
+    // }
+
+    // fn should_clear_children(&self) -> bool {
+    //     if self.is_file || self.opened {
+    //         return false;
+    //     }
+
+    //     let time_since_access = self.last_accessed_time.elapsed();
+
+    //     time_since_access > TIME_THRESHOLD && self.access_count < ACCESS_THRESHOLD
+    // }
 
     pub fn ui(&mut self, ui: &mut egui::Ui) -> Option<PathBuf> {
         self.ui_impl(ui)
@@ -77,14 +117,14 @@ impl Explorer {
 
     fn ui_impl(&mut self, ui: &mut egui::Ui) -> Option<PathBuf> {
         if self.is_file {
+            // TODO: remove button and directly show file contents on hover
             if ui.button(RichText::new(&self.name)).clicked() {
                 return Some(self.path.clone());
             }
         } else {
             let response = CollapsingHeader::new(RichText::new(&self.name))
-                .default_open(self.children.len() < 3)
+                .default_open(self.initial_open)
                 .show(ui, |ui| {
-                    self.load_children();
                     for child in &mut self.children {
                         if let Some(path) = child.ui_impl(ui) {
                             return Some(path);
@@ -92,6 +132,16 @@ impl Explorer {
                     }
                     None
                 });
+
+            if !self.opened && response.fully_open() {
+                self.opened = true;
+                self.load_children();
+            } else if self.opened && response.fully_closed() {
+                self.opened = false;
+                // if self.should_clear_children() {
+                //     self.clear_children();
+                // }
+            }
 
             if let Some(body_returned) = response.body_returned {
                 return body_returned;
