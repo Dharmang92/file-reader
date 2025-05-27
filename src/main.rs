@@ -6,7 +6,7 @@ use eframe::{
 };
 use std::{
     fs,
-    path::{Path, PathBuf},
+    path::{Path, PathBuf, absolute},
 };
 use walkdir::WalkDir;
 
@@ -21,11 +21,11 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "File Reader",
         options,
-        Box::new(|cc| Ok(Box::new(MyApp::new(cc)))),
+        Box::new(|cc| Ok(Box::new(FileReader::new(cc)))),
     )
 }
 
-struct MyApp {
+struct FileReader {
     path: String,
     explorer: Explorer,
     files: Vec<PathBuf>,
@@ -39,7 +39,7 @@ struct MyApp {
     error: String,
 }
 
-impl MyApp {
+impl FileReader {
     fn new(cc: &CreationContext) -> Self {
         let mut style = (*cc.egui_ctx.style()).clone();
         style
@@ -159,14 +159,11 @@ impl MyApp {
 }
 
 fn get_roaming_path() -> PathBuf {
-    dirs::data_dir()
-        .unwrap()
-        .join("Microsoft/UserSecrets")
-        .canonicalize()
+    absolute(dirs::data_dir().unwrap().join("Microsoft/UserSecrets"))
         .expect("Failed to fetch local directory!")
 }
 
-impl App for MyApp {
+impl App for FileReader {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::TopBottomPanel::top("path_input_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
